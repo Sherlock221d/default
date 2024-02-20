@@ -1,0 +1,505 @@
+22
+
+public StatusMsg AddUserMaster(UserMasterM objUserMaster)
+{
+    using (SqlConnection conn = new SqlConnection(_connectionString))
+    {
+        try
+        {
+            SqlCommand cmd = new SqlCommand();
+            cmd.Connection = conn;
+            cmd.CommandText = "SP_InsertUserMasterdata";
+            cmd.CommandType = CommandType.StoredProcedure;
+            conn.Open();
+            cmd.Parameters.AddWithValue("@name", objUserMaster.Name);
+            cmd.Parameters.AddWithValue("@username", objUserMaster.UserName);
+            cmd.Parameters.AddWithValue("@usertype", objUserMaster.UserType);
+            cmd.Parameters.AddWithValue("@branchid", objUserMaster.BranchId);
+            cmd.Parameters.AddWithValue("@companyid", objUserMaster.CompanyId);
+
+            // Execute the command and retrieve any potential data using ExecuteReader
+            using (SqlDataReader reader = cmd.ExecuteReader())
+            {
+                // No data is expected to be returned from an INSERT operation,
+                // so you might not need to process any data here.
+                // You can simply return a success message if the operation completes without errors.
+            }
+
+            return new StatusMsg { }; // Return success message
+        }
+        catch (Exception ex)
+        {
+            LogError(ex);
+            return new StatusMsg { }; // Return error message
+        }
+        finally
+        {
+            conn.Close();
+        }
+    }
+}
+public StatusMsg UpdateUserMaster(int id, UserMasterM objUserMaster)
+{
+    using (SqlConnection conn = new SqlConnection(_connectionString))
+    {
+        try
+        {
+            SqlCommand cmd = new SqlCommand();
+            cmd.Connection = conn;
+            cmd.CommandText = "SP_UpdateUserMaster";
+            cmd.CommandType = CommandType.StoredProcedure;
+            conn.Open();
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.Parameters.AddWithValue("@name", objUserMaster.Name);
+            cmd.Parameters.AddWithValue("@username", objUserMaster.UserName);
+            cmd.Parameters.AddWithValue("@usertype", objUserMaster.UserType);
+            cmd.Parameters.AddWithValue("@branchid", objUserMaster.BranchId);
+            cmd.Parameters.AddWithValue("@companyid", objUserMaster.CompanyId);
+
+            using (SqlDataReader reader = cmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    // Process data if needed
+                }
+            }
+
+            return new StatusMsg { };
+        }
+        catch (Exception ex)
+        {
+            LogError(ex);
+            return new StatusMsg { };
+        }
+        finally
+        {
+            conn.Close();
+        }
+    }
+}
+
+---------------
+original
+---
+---
+launchsettings.json
+
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "iisSettings": {
+    "windowsAuthentication": false,
+    "anonymousAuthentication": true,
+    "iisExpress": {
+      "applicationUrl": "http://localhost:13761",
+      "sslPort": 44303
+    }
+  },
+  "profiles": {
+    "WebApplication1": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "applicationUrl": "https://localhost:7127;http://localhost:5164",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "IIS Express": {
+      "commandName": "IISExpress",
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
+
+
+------------------
+appseetting.json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*"
+}
+------------------
+Program.cs
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+-------------------------------------
+-------change----------------
+launchsettings.json
+
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "iisSettings": {
+    "windowsAuthentication": false,
+    "anonymousAuthentication": true,
+    "iisExpress": {
+      "applicationUrl": "http://localhost:35889",
+      "sslPort": 44398
+    }
+  },
+  "profiles": {
+    "Inventory.API": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "applicationUrl": "http://localhost:5000",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "IIS Express": {
+      "commandName": "IISExpress",
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
+----------------------------
+appsettings.json
+
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "SqlConnection": "Server=DESKTOP-4P0IKCK\\SQLEXPRESS;Database=InventorySystems;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True;Encrypt=True"
+  
+
+  }
+}
+----------
+Program.cs
+
+var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: MyAllowSpecificOrigins,
+                      builder =>
+                      {
+                          builder.WithOrigins(" http://localhost:5000",
+                                              "http://www.contoso.com");
+                      });
+});
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseCors(MyAllowSpecificOrigins);
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+
+--------------------------------------
+webconfig file
+
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  For more information on how to configure your ASP.NET application, please visit
+  https://go.microsoft.com/fwlink/?LinkId=169433
+  -->
+<configuration>
+  <system.web>
+    <compilation debug="true" targetFramework="4.7.2" />
+    <httpRuntime targetFramework="4.7.2" />
+  </system.web>
+
+	<appSettings>
+		<add key="APIBaseUrl" value="http://localhost:5000"/>
+	</appSettings>
+	
+  <system.codedom>
+    <compilers>
+      <compiler language="c#;cs;csharp" extension=".cs" type="Microsoft.CodeDom.Providers.DotNetCompilerPlatform.CSharpCodeProvider, Microsoft.CodeDom.Providers.DotNetCompilerPlatform, Version=2.0.1.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" warningLevel="4" compilerOptions="/langversion:default /nowarn:1659;1699;1701" />
+      <compiler language="vb;vbs;visualbasic;vbscript" extension=".vb" type="Microsoft.CodeDom.Providers.DotNetCompilerPlatform.VBCodeProvider, Microsoft.CodeDom.Providers.DotNetCompilerPlatform, Version=2.0.1.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" warningLevel="4" compilerOptions="/langversion:default /nowarn:41008 /define:_MYTYPE=\&quot;Web\&quot; /optionInfer+" />
+    </compilers>
+  </system.codedom>
+
+</configuration>
+
+-----------------------
+----------------------
+public class UserMasterDataContext
+{
+    // Existing code...
+
+    public List<UserMasterM> CallStoredProcedure()
+    {
+        List<UserMasterM> userMasters = new List<UserMasterM>();
+        using (SqlConnection conn = new SqlConnection(_connectionString))
+        {
+            try
+            {
+                SqlCommand cmd = new SqlCommand();
+                cmd.Connection = conn;
+                cmd.CommandText = "NameOfYourStoredProcedure"; // Update with your stored procedure name
+                cmd.CommandType = CommandType.StoredProcedure;
+                conn.Open();
+
+                SqlDataReader dataReader = cmd.ExecuteReader();
+
+                while (dataReader.Read())
+                {
+                    UserMasterM userMaster = new UserMasterM
+                    {
+                        id = Convert.ToInt32(dataReader["Id"]),
+                        Name = dataReader["Name"].ToString(),
+                        UserName = dataReader["UserName"].ToString(),
+                        UserType = dataReader["UserType"].ToString(),
+                        BranchId = Convert.ToInt32(dataReader["BranchId"]),
+                        CompanyId = Convert.ToInt32(dataReader["CompanyId"]),
+                    };
+
+                    userMasters.Add(userMaster);
+                }
+
+                dataReader.Close();
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+            }
+            finally
+            {
+                conn.Close();
+            }
+        }
+        return userMasters;
+    }
+
+    // Existing code...
+}
+---------
+protected async void Page_Load(object sender, EventArgs e)
+{
+    if (!IsPostBack)
+    {
+        await BindGridViewAsync();
+        btnSubmit.Visible = true;
+
+        // Call the stored procedure method
+        List<UserMasterM> result = _userMasterDataContext.CallStoredProcedure();
+        // Do something with the result if needed
+    }
+}
+----------
+------2-------
+------------------
+public class UserMasterDataContext
+{
+    // ... (existing code)
+
+    public List<UserMasterM> GetUsersWithoutParameters()
+    {
+        List<UserMasterM> userMasters = new List<UserMasterM>();
+
+        using (SqlConnection conn = new SqlConnection(_connectionString))
+        {
+            try
+            {
+                SqlCommand cmd = new SqlCommand();
+                cmd.Connection = conn;
+                cmd.CommandText = "SP_GetUsersWithoutParameters"; // Replace with your actual stored procedure name
+                cmd.CommandType = CommandType.StoredProcedure;
+                conn.Open();
+
+                SqlDataReader dataReader = cmd.ExecuteReader();
+
+                while (dataReader.Read())
+                {
+                    UserMasterM userMaster = new UserMasterM
+                    {
+                        id = Convert.ToInt32(dataReader["Id"]),
+                        Name = dataReader["Name"].ToString(),
+                        UserName = dataReader["UserName"].ToString(),
+                        UserType = dataReader["UserType"].ToString(),
+                        BranchId = Convert.ToInt32(dataReader["BranchId"]),
+                        CompanyId = Convert.ToInt32(dataReader["CompanyId"]),
+                    };
+
+                    userMasters.Add(userMaster);
+                }
+
+                dataReader.Close();
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+            }
+            finally
+            {
+                conn.Close();
+            }
+        }
+
+        return userMasters;
+    }
+    
+    // ... (existing code)
+}
+-----
+[Route("api/[controller]")]
+[ApiController]
+public class UsermasterController : ControllerBase
+{
+    // ... (existing code)
+
+    //GET Without Parameters
+    [Route("GetUsersWithoutParameters")]
+    [HttpGet]
+    public IActionResult GetUsersWithoutParameters()
+    {
+        try
+        {
+            var usersWithoutParameters = _userMasterBusinessContext.GetUsersWithoutParameters();
+            return Ok(usersWithoutParameters);
+        }
+        catch (Exception ex)
+        {
+            // Handle and log the exception
+            return StatusCode(500, "An error occurred while retrieving users without parameters.");
+        }
+    }
+
+    // ... (existing code)
+}
+----
+public class UserMasterBussinessContext
+{
+    private readonly UserMasterDataContext _userMasterDataContext;
+
+    public UserMasterBussinessContext(UserMasterDataContext userMasterDataContext)
+    {
+        _userMasterDataContext = userMasterDataContext;
+    }
+
+    public List<UserMasterM> GetUsersWithoutParameters()
+    {
+        try
+        {
+            var usersWithoutParameters = _userMasterDataContext.GetUsersWithoutParameters();
+            return usersWithoutParameters;
+        }
+        catch (Exception ex)
+        {
+            // Handle and log the exception
+            return new List<UserMasterM>();
+        }
+    }
+
+    // ... (existing code)
+}
+------------
+using System;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using System.Collections.Generic;
+using Inventory.Web.Models; // Make sure to include the appropriate namespace for UserMasterMod
+
+namespace Inventory.Web
+{
+    public partial class UserMaster : System.Web.UI.Page
+    {
+        protected async void Page_Load(object sender, EventArgs e)
+        {
+            if (!IsPostBack)
+            {
+                await BindGridViewAsync();
+                btnSubmit.Visible = true;
+            }
+        }
+
+        // Your other methods here...
+
+        private async Task BindGridViewAsync()
+        {
+            using (HttpClient httpClient = new HttpClient())
+            {
+                // Update the base address with your API base URL
+                httpClient.BaseAddress = new Uri("https://yourapi.com/");
+                httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                HttpResponseMessage response = await httpClient.GetAsync("api/Usermaster/GetUsersWithoutParameters");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    string responseData = await response.Content.ReadAsStringAsync();
+                    List<UserMasterMod> userMasters = JsonConvert.DeserializeObject<List<UserMasterMod>>(responseData);
+
+                    grdItemEntry.DataSource = userMasters;
+                    grdItemEntry.DataBind();
+                }
+                else
+                {
+                    // Handle failure to fetch data
+                }
+            }
+        }
+
+        // Your other methods here...
+    }
+}
+-----------------

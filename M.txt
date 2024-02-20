@@ -1,0 +1,654 @@
+in/out
+----
+using Inventory.Web.Models;
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Web;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.Configuration;
+using System.Data;
+using System.Xml.Linq;
+using System.Text;
+using System.Drawing;
+using static Inventory.Web.Models.StockInward1;
+
+namespace Inventory.Web
+{
+    public partial class StockInwardAddItem : System.Web.UI.Page
+    {
+        protected async void Page_Load(object sender, EventArgs e)
+        {
+            if (!IsPostBack)
+            {
+                await BindSuppliersAsync();
+            }
+        }
+
+        private void LogError(Exception ex)
+        {
+            string projectPath = Directory.GetCurrentDirectory();
+            string logFilePath = Path.Combine(projectPath, "ErrorLog.txt");
+
+            using (StreamWriter writer = new StreamWriter(logFilePath, true))
+            {
+                writer.WriteLine("------------------------------------------------------------------");
+                writer.WriteLine("Error Logged at " + DateTime.Now);
+                writer.WriteLine("Error Message: " + ex.Message);
+                writer.WriteLine("Stack Trace: " + ex.StackTrace);
+
+                if (ex.InnerException != null)
+                {
+                    writer.WriteLine("Inner Exception: " + ex.InnerException.Message);
+                    writer.WriteLine("Inner Exception Stack Trace: " + ex.InnerException.StackTrace);
+                }
+            }
+        }
+
+        protected async void btnsubmitItem_Click(object sender, EventArgs e)
+        {
+            StockInward1 stockIn = new StockInward1
+            {
+                SupplierId = Convert.ToInt32(ddlSuplierName.SelectedValue),
+                InwardDate = Convert.ToDateTime(txtInwarddate.Text),
+            }; 
+            StockInwardItemsone item1 = new StockInwardItemsone
+            {
+                StockInwardId = stockIn.Id, 
+                QuantityIn = 10, 
+                ItemId = 456
+            };
+            stockIn.ChildTable1 = new List<StockInwardItemsone> { item1 };
+            StockInwardItemsLocation location1 = new StockInwardItemsLocation
+            {
+                StockInwardId = stockIn.Id, 
+                QuantityInn = 5,
+                ItemId = 789 
+            };
+
+            
+            stockIn.ChildTable2 = new List<StockInwardItemsLocation> { location1 };
+
+            await AddStockInwardAsync(stockIn);
+            panneladdstock.Visible = true;
+           
+            await BindRackAsync();
+            await BindStocknamedataAsync();
+            }
+        private async Task AddStockInwardAsync(StockInward1 stockIn)
+        {
+            try
+            {
+                using (HttpClient httpClient = new HttpClient())
+                {
+                    httpClient.BaseAddress = new Uri(ConfigurationManager.AppSettings["APIBaseUrl"].ToString());
+                    httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                    string payloadJson = JsonConvert.SerializeObject(stockIn);
+                    HttpContent content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
+
+                    HttpResponseMessage response = await httpClient.PostAsync("api/StockInwardRegister/AddStockInwardRegister", content);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string responseContent = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine(responseContent);
+                       
+                    }
+                    else
+                    {
+                        string errorResponseContent = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine(errorResponseContent);
+                       
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+                
+            }
+        }
+    
+
+        protected async void btnSave_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (ddlStockName1.SelectedValue == "")
+                {
+                  
+                    return;
+                }
+
+                int stockId = Convert.ToInt32(ddlStockName1.SelectedValue);
+
+                
+                if (string.IsNullOrEmpty(txttotalqty.Text))
+                {
+                    
+                    return;
+                }
+                int totalQuantity = Convert.ToInt32(txttotalqty.Text);
+
+                List<StockInward1.StockInwardItemsone> itemsList = new List<StockInward1.StockInwardItemsone>();
+                List<StockInwardItemsLocation> locationsList = new List<StockInwardItemsLocation>();
+
+                DataTable dtCurrentTable = ViewState["dt"] as DataTable;
+
+                foreach (DataRow row in dtCurrentTable.Rows)
+                {
+                    if (row["Rack"] != null && row["QtyIn"] != null && row["Floor"] != null)
+                    {
+                        string floor = row["Floor"].ToString();
+                        string rack = row["Rack"].ToString();
+                        int qtyIn = Convert.ToInt32(row["QtyIn"]);
+
+                        StockInward1.StockInwardItemsone item = new StockInward1.StockInwardItemsone
+                        {
+                            QuantityIn = qtyIn,
+                            ItemId = stockId,
+                        };
+
+                        StockInwardItemsLocation location = new StockInwardItemsLocation
+                        {
+                            QuantityInn = qtyIn,
+                            FloorId = floor,
+                            RackId = rack,
+                            ItemId = stockId,
+                        };
+
+                       
+                        itemsList.Add(item);
+                        locationsList.Add(location);
+                    }
+                }
+
+                StockInward1 stockInward = new StockInward1
+                {
+                    SupplierId = Convert.ToInt32(ddlSuplierName.SelectedValue),
+                    InwardDate = Convert.ToDateTime(txtInwarddate.Text),
+                    ChildTable1 = itemsList,
+                    ChildTable2 = locationsList,
+               
+                };
+
+                await AddStockInwardAsync(stockInward);
+
+                // Update Stock Master if Stock Name is provided
+                if (!string.IsNullOrEmpty(txttotalqty.Text))
+                {
+                    await UpdateStockMasterAsync(stockId, totalQuantity);
+                }
+
+                ViewState["dt"] = null;
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+            }
+        }
+
+        private async Task UpdateStockMasterAsync(int stockId, int totalQuantity)
+        {
+            try
+            {
+                using (HttpClient httpClient = new HttpClient())
+                {
+                    httpClient.BaseAddress = new Uri(ConfigurationManager.AppSettings["APIBaseUrl"].ToString());
+                    httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                    StockMasterM stockMaster = new StockMasterM
+                    {
+                        Id = stockId,
+                        Quantity = totalQuantity
+                    };
+
+                    string payloadJson = JsonConvert.SerializeObject(stockMaster);
+                    HttpContent content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
+
+                    HttpResponseMessage response = await httpClient.PutAsync("api/StockMaster/UpdateStockMaster", content);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        // Handle error if needed
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+            }
+        }
+
+        // ... (remaining methods and event handlers remain the same)
+    
+
+
+protected void btnGogrd_Click(object sender, EventArgs e)
+        {
+            if (ddlFloor3.SelectedItem != null && ddlRack3.SelectedItem != null && !string.IsNullOrEmpty(txtqty.Text))
+            {
+                if (ViewState["dt"] == null)
+                {
+                    DataTable dt = new DataTable();
+                    dt.Columns.AddRange(new DataColumn[3] { new DataColumn("Floor"), new DataColumn("Rack"), new DataColumn("QtyIn") });
+                    ViewState["dt"] = dt;
+                }
+
+                DataTable dtCurrentTable = (DataTable)ViewState["dt"];
+                DataRow drCurrentRow = dtCurrentTable.NewRow();
+                drCurrentRow["Floor"] = ddlFloor3.SelectedItem.Text;
+                drCurrentRow["Rack"] = ddlRack3.SelectedItem.Text;
+                drCurrentRow["QtyIn"] = txtqty.Text;
+                dtCurrentTable.Rows.Add(drCurrentRow);
+
+                gvStockInward.DataSource = dtCurrentTable;
+                gvStockInward.DataBind();
+            }
+        }
+        protected void BindGrid()
+        {
+            if (ViewState["dt"] != null)
+            {
+                gvStockInward.DataSource = ViewState["dt"] as DataTable;
+                gvStockInward.DataBind();
+            }
+        }
+        private async Task BindSuppliersAsync()
+        {
+            using (HttpClient httpClient = new HttpClient())
+            {
+                httpClient.BaseAddress = new Uri(ConfigurationManager.AppSettings["APIBaseUrl"].ToString());
+                httpClient.DefaultRequestHeaders.Accept.Clear();
+                httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                var response = await httpClient.GetAsync("api/SupplierMaster/GetAllSupplierMasters");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var jsonString = await response.Content.ReadAsStringAsync();
+                    var suppliers = JsonConvert.DeserializeObject<List<SupplierMasterModel>>(jsonString);
+                    ddlSuplierName.DataSource = suppliers;
+                    ddlSuplierName.DataTextField = "SupplierName";
+                    ddlSuplierName.DataValueField = "Id";
+                    ddlSuplierName.DataBind();
+                }
+                else
+                {
+
+                }
+            }
+        }
+
+        private async Task BindStocknamedataAsync()
+        {
+
+
+            //StockMasterM objstockk = new StockMasterM
+            //{
+            //    Id=Convert.ToInt32("Id"),
+            //    Stock_Name=Convert.ToString("Stock_Name")
+            //};
+            List<DropDownModel> objStockMasterM = new List<DropDownModel>();
+            using (HttpClient httpClient = new HttpClient())
+            {
+                httpClient.BaseAddress = new Uri(ConfigurationManager.AppSettings["APIBaseUrl"].ToString());
+                httpClient.DefaultRequestHeaders.Accept.Clear();
+                httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+               // HttpContent content = new StringContent(JsonConvert.SerializeObject(objstockk), Encoding.UTF8, "application/json");
+                var response = await httpClient.GetAsync("api/StockMaster/GetAllStockMasters");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var jsonString = await response.Content.ReadAsStringAsync();
+                    var sttock = JsonConvert.DeserializeObject<List<StockMasterM>>(jsonString);
+
+                    ddlStockName1.DataSource = sttock;
+                    ddlStockName1.DataTextField = "Id";
+                    ddlStockName1.DataValueField = "Id";
+                    ddlStockName1.DataBind();
+                }
+                else
+                {
+
+                    string errorResponseContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine(errorResponseContent);
+                }
+            }
+        }
+        private async Task BindRackAsync()
+        {
+            using (HttpClient httpClient = new HttpClient())
+            {
+                httpClient.BaseAddress = new Uri(ConfigurationManager.AppSettings["APIBaseUrl"].ToString());
+                httpClient.DefaultRequestHeaders.Accept.Clear();
+                httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                var response = await httpClient.GetAsync("api/RackMaster/GetAllRackMasters");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var jsonString = await response.Content.ReadAsStringAsync();
+                    var suppliers = JsonConvert.DeserializeObject<List<RackMasterModelone>>(jsonString);
+                    ddlRack3.DataSource = suppliers;
+                    ddlRack3.DataTextField = "RackName";
+                    ddlRack3.DataValueField = "Id";
+                    ddlRack3.DataBind();
+                }
+                else
+                {
+
+                }
+            }
+        }
+    }
+
+}
+----------rough
+inward
+<%@ Page Title="" Language="C#" MasterPageFile="~/MainMasterPage.Master" AutoEventWireup="true" CodeBehind="StockInwardAddItem.aspx.cs" Inherits="Inventory.Web.StockInwardAddItem" Async="true" %>
+
+<asp:Content ID="Content1" ContentPlaceHolderID="head" runat="server">
+</asp:Content>
+<asp:Content ID="Content2" ContentPlaceHolderID="ContentPlaceHolder1" runat="server">
+    <form runat="server">
+        <%--      First Section where Supplier name and Inward date--%>
+        <div class="row">
+            <div class="form-group col-sm-6">
+                <asp:Label runat="server" CssClass="col-form-label" Text="Select Supplier: "></asp:Label>
+                <div>
+                    <asp:DropDownList runat="server" ID="ddlSuplierName" CssClass="form-control" placeholder="Select Supplier Name"  DataValueField="SupplierId" DataTextField="SupplierName"></asp:DropDownList>
+                </div>
+            </div>
+
+            <div class="form-group col-sm-6">
+                <asp:Label runat="server" CssClass="col-form-label" Text="Inward Date: "></asp:Label>
+                <div>
+                    <asp:TextBox runat="server" ID="txtInwarddate" CssClass="form-control" TextMode="Date"></asp:TextBox>
+                </div>
+            </div>
+        </div>
+        <div class="form-group row">
+            <div class="col-sm-6 text-right">
+                <asp:Button runat="server" ID="btnsubmitItem" Text="Submit" OnClick="btnsubmitItem_Click" class="btn btn-primary btn-icon-split" Style="height: 40px; width: 100px;" />
+            </div>
+
+            <div class="form-group row">
+                <div class="col-sm-6 text-left">
+                    <asp:Button runat="server" ID="btnCancel" Text="Cancel" class="btn btn-secondary btn-icon-split" Style="height: 40px; width: 100px;" />
+                </div>
+            </div>
+        </div>
+        <%--End of First Section--%>
+        <%-- Second Section --%>
+        <asp:Panel ID="panneladdstock" runat="server" Visible="false">
+            <div class="row">
+               
+
+                <div class="col-sm-4">
+                    <div class="form-group">
+                        <asp:Label runat="server" CssClass="col-form-label" Text="Total Qty: "></asp:Label>
+                        <asp:TextBox runat="server" ID="txttotalqty" CssClass="form-control"></asp:TextBox>
+                    </div>
+                </div>
+
+                 <div class="col-sm-4">
+                    <div class="form-group">
+                        <asp:Label runat="server" CssClass="col-form-label" Text="Stock Name: "></asp:Label>
+                        <asp:DropDownList runat="server" ID="ddlStockName1" CssClass="form-control" DataValueField="Value" DataTextField="Text" >
+                             <%--<asp:ListItem Text="First Floor" Value="1" />
+                        <asp:ListItem Text="Second Floor" Value="2" />
+                        <asp:ListItem Text="Third Floor" Value="3" />
+                        <asp:ListItem Text="Fourth Floor" Value="4" />
+                        <asp:ListItem Text="Fifth Floor" Value="5" />
+                        <asp:ListItem Text="Sixth Floor" Value="6" />
+                        <asp:ListItem Text="Seventh Floor" Value="7" />
+                        <asp:ListItem Text="Eight Floor" Value="8" />
+                        <asp:ListItem Text="Nineth Floor" Value="9" />--%>
+                        </asp:DropDownList>
+                    </div>
+                </div>
+
+
+                <div class="col-sm-4 align-self-end">
+                    <div class="form-group text-center">
+                        <asp:Button runat="server" ID="QrCodeprint" Text="Print QR Code" class="btn btn-primary btn-icon-split" Style="height: 40px; width: 150px;" />
+                    </div>
+                </div>
+            </div>
+
+            <%--Second Section Tables Binding--%>
+            <div class="row">
+                <div class="col-md-4">
+                    <asp:DropDownList ID="ddlFloor3" CssClass="form-control" runat="server" DataValueField="Value" DataTextField="Text">
+                        <asp:ListItem Text="First Floor" Value="1" />
+                        <asp:ListItem Text="Second Floor" Value="2" />
+                        <asp:ListItem Text="Third Floor" Value="3" />
+                        <asp:ListItem Text="Fourth Floor" Value="4" />
+                        <asp:ListItem Text="Fifth Floor" Value="5" />
+                        <asp:ListItem Text="Sixth Floor" Value="6" />
+                        <asp:ListItem Text="Seventh Floor" Value="7" />
+                        <asp:ListItem Text="Eight Floor" Value="8" />
+                        <asp:ListItem Text="Nineth Floor" Value="9" />
+                        <asp:ListItem Text="Tenth Floor" Value="10" />
+                        <asp:ListItem Text="Eleven Floor" Value="11" />
+                    </asp:DropDownList>
+                </div>
+                <div class="col-md-4">
+                    <asp:DropDownList ID="ddlRack3" CssClass="form-control" runat="server" DataValueField="Value" DataTextField="Text">
+                    </asp:DropDownList>
+                </div>
+                <div class="col-md-3">
+                    <asp:TextBox ID="txtqty" CssClass="form-control" runat="server"></asp:TextBox>
+                </div>
+                <div class="col-md-1">
+                    <asp:Button ID="btnGogrd" runat="server" class="btn btn-primary" Text="Go" OnClick="btnGogrd_Click"/>
+                </div>
+            </div>
+            <br />
+            <br />
+            <asp:GridView ID="gvStockInward" runat="server" AutoGenerateColumns="False" class="table table-bordered table-striped">
+                <Columns>
+                    <asp:BoundField DataField="Floor" HeaderText="Floor" ItemStyle-Width="300" />
+                    <asp:BoundField DataField="Rack" HeaderText="Rack" ItemStyle-Width="300" />
+                    <asp:BoundField DataField="QtyIn" HeaderText="QtyIn" ItemStyle-Width="300" />
+                    <asp:TemplateField>
+                        <HeaderTemplate>
+                            <asp:Label ID="lblActionHeader" runat="server" Text="Action" />
+                        </HeaderTemplate>
+                        <ItemTemplate>
+                            <asp:LinkButton Text="Edit" runat="server" CommandName="Edit" />
+                        </ItemTemplate>
+                    </asp:TemplateField>
+                </Columns>
+            </asp:GridView>
+            <div class="col-sm-6 text-right">
+                <asp:Button runat="server" ID="btnSave" Text="Save" OnClick="btnSave_Click" class="btn btn-primary btn-icon-split" Style="height: 40px; width: 100px;" />
+            </div>
+        </asp:Panel>
+        <%-- End Section Tables Binding and--%>
+    </form>
+</asp:Content>
+--------------------------------------
+
+outward
+using Inventory.Web.Models;
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.Diagnostics;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Web;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.IO;
+using System.Data.SqlClient;
+using System.Threading.Tasks;
+
+namespace Inventory.Web
+{
+    public partial class StockOutwardAddItem : System.Web.UI.Page
+    {
+        protected void Page_Load(object sender, EventArgs e)
+        {
+
+        }
+        private void LogError(Exception ex)
+        {
+            string projectPath = Directory.GetCurrentDirectory();
+            string logFilePath = Path.Combine(projectPath, "ErrorLog.txt");
+
+            using (StreamWriter writer = new StreamWriter(logFilePath, true))
+            {
+                writer.WriteLine("--------------------------------------------------------------------------------------------");
+                writer.WriteLine("Error Logged at " + DateTime.Now);
+                writer.WriteLine("Error Message: " + ex.Message);
+                writer.WriteLine("Stack Trace: " + ex.StackTrace);
+
+                if (ex.InnerException != null)
+                {
+                    writer.WriteLine("Inner Exception: " + ex.InnerException.Message);
+                    writer.WriteLine("Inner Exception Stack Trace: " + ex.InnerException.StackTrace);
+                }
+            }
+        }
+        protected  void btnsubmitItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                StockOutwardMaster objStockOutwardMaster = new StockOutwardMaster();
+                objStockOutwardMaster.CustomerName = txtCustomerName.Text.Trim();
+                objStockOutwardMaster.Outwarddate = Convert.ToDateTime(txtOutwarddate.Text.Trim());
+
+                using (var httpClient = new HttpClient())
+                {
+                    var json = JsonConvert.SerializeObject(objStockOutwardMaster);
+                    HttpContent content = new StringContent(json);
+                    content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                    httpClient.BaseAddress = new Uri(ConfigurationManager.AppSettings["APIBaseUrl"].ToString());
+                    httpClient.DefaultRequestHeaders.Accept.Clear();
+                    httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+
+                    // Use Task.Run to offload the blocking HTTP call to a separate thread
+                    var response = Task.Run(async () => await httpClient.PostAsync("http://localhost:5000/api/StockOutwardRegister/AddStockOutwardRegister", content)).Result;
+
+                    if (response.StatusCode == System.Net.HttpStatusCode.OK)
+                    {
+                        Response.Redirect("StockOutwardList.aspx");
+                    }
+                    else if (response.Content != null)
+                    {
+                        var errorContent = response.Content.ReadAsStringAsync().Result;
+
+                        try
+                        {
+                            var errorData = JsonConvert.DeserializeObject<dynamic>(errorContent);
+                            string errorMessage = errorData.title;
+
+                            dynamic errors = errorData.errors;
+                            foreach (var keyValuePair in errors)
+                            {
+                                string fieldName = keyValuePair.Key;
+                                string[] errorMessages = keyValuePair.Value.ToObject<string[]>();
+
+                                // Now you can handle each field's error messages as needed
+                                // For example, displaying them to the user
+                                foreach (string errorMsg in errorMessages)
+                                {
+                                    // Do something with the error message, e.g., show it to the user
+                                }
+                            }
+                        }
+                        catch (JsonException)
+                        {
+                            // If deserialization fails, handle it as needed
+                        }
+                    }
+                    else
+                    {
+                        // Handle other error scenarios
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+            }
+        }
+
+        public class ErrorData
+        {
+            public string Message { get; set; }
+            // Add other properties if necessary
+        }
+
+        protected void btnCancel_Click(object sender, EventArgs e)
+        {
+            Response.Redirect("StockOutwardList.aspx");
+        }
+    }
+}
+<%@ Page Title="" Language="C#" MasterPageFile="~/MainMasterPage.Master" AutoEventWireup="true" CodeBehind="StockOutwardAddItem.aspx.cs" Inherits="Inventory.Web.StockOutwardAddItem" %>
+
+<asp:Content ID="Content1" ContentPlaceHolderID="head" runat="server">
+</asp:Content>
+<asp:Content ID="Content2" ContentPlaceHolderID="ContentPlaceHolder1" runat="server">
+    <form runat="server">
+        <div class="parent">
+        
+        </div>
+        <div class="child">
+            <div class="form-group row">
+                <asp:Label runat="server" CssClass="col-sm-2 col-form-label" Text="Customer Name: "></asp:Label>
+                <div class="col-sm-10">
+                    <asp:TextBox runat="server" ID="txtCustomerName" CssClass="form-control"></asp:TextBox>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group row">
+                <asp:Label runat="server" CssClass="col-sm-2 col-form-label" Text="Outward date: "></asp:Label>
+                <div class="col-sm-10">
+                    <asp:TextBox runat="server" ID="txtOutwarddate" CssClass="form-control" TextMode="Date"></asp:TextBox>
+                </div>
+            </div>
+        
+            <br />
+            <div class="form-group row">
+                <div class="col-sm-6 text-right">
+                    <asp:Button runat="server" ID="btnsubmitItem" Text="Submit" OnClick="btnsubmitItem_Click" class="btn btn-primary btn-icon-split" Style="height: 40px; width: 100px;" />
+                </div>
+
+                <div class="form-group row">
+                    <div class="col-sm-6 text-left">
+                        <asp:Button runat="server" ID="btnCancel" Text="Cancel" OnClick="btnCancel_Click" class="btn btn-secondary btn-icon-split" Style="height: 40px; width: 100px;" />
+                    </div>
+                </div>
+            </div>
+    </form>
+    <script>
+        function displayModal() {
+            $('#locationModal').modal('show');
+            return false;
+        }
+    </script>
+    <script>
+        function showModal() {
+            $('#myModal').modal('show');
+            return false;
+        }
+    </script>
+</asp:Content>
+----------------------------------
+
